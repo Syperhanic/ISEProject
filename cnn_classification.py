@@ -49,7 +49,7 @@ def clean_str(text):
 # ==================== 2. Load & Preprocess Data ====================
 
 # Load the dataset
-df = pd.read_csv("caffe.csv")
+df = pd.read_csv("tensorflow.csv")
 
 # Merge "Title" and "Body" into a new "text" column
 df["text"] = df["Title"].astype(str) + " " + df["Body"].astype(str)
@@ -170,50 +170,75 @@ optimizer = optim.Adam(model.parameters(), lr=0.004288702295008052)
 
 num_epochs = 45
 
-for epoch in range(num_epochs):
-    model.train()
-    total_loss = 0
+NUM_RUNS = 5
 
-    for X_batch, y_batch in train_data:
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+# Store all metrics for averaging
+all_accuracies = []
+all_precisions = []
+all_recalls = []
+all_f1s = []
+all_aucs = []
 
-        optimizer.zero_grad()
-        outputs = model(X_batch)
-        loss = criterion(outputs, y_batch.squeeze().long())
+for run in range(NUM_RUNS):
+    print(f"\n=== Run {run+1}/{NUM_RUNS} ===")
 
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
+    # Create a fresh model each run
+    model = CNNTextClassifier(embedding_dim, num_classes).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.004288702295008052)
 
-    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss:.4f}")
+    # === Training ===
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0
+        for X_batch, y_batch in train_data:
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+            optimizer.zero_grad()
+            outputs = model(X_batch)
+            loss = criterion(outputs, y_batch.squeeze().long())
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss:.4f}")
 
-# ==================== 7. Evaluate the Model ====================
+    # === Evaluation ===
+    model.eval()
+    all_preds, all_labels = [], []
+    with torch.no_grad():
+        for X_batch, y_batch in test_data:
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+            outputs = model(X_batch)
+            probs = torch.softmax(outputs, dim=1)
+            preds = torch.argmax(probs, dim=1)
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(y_batch.cpu().numpy())
 
-# Evaluate the model once on the fixed train-test split
-model.eval()
-all_preds, all_labels = [], []
-with torch.no_grad():
-    for X_batch, y_batch in test_data:
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        outputs = model(X_batch)
-        probs = torch.softmax(outputs, dim=1)
-        preds = torch.argmax(probs, dim=1)
-        all_preds.extend(preds.cpu().numpy())
-        all_labels.extend(y_batch.cpu().numpy())
+    accuracy = accuracy_score(all_labels, all_preds)
+    precision = precision_score(all_labels, all_preds, average='macro')
+    recall = recall_score(all_labels, all_preds, average='macro')
+    f1 = f1_score(all_labels, all_preds, average='macro')
+    auc_score = roc_auc_score(all_labels, all_preds)
 
-# Compute and print final results
-accuracy = accuracy_score(all_labels, all_preds)
-precision = precision_score(all_labels, all_preds, average='macro')
-recall = recall_score(all_labels, all_preds, average='macro')
-f1 = f1_score(all_labels, all_preds, average='macro')
-auc_score = roc_auc_score(all_labels, all_preds)
+    print(f"\nRun {run+1} Results:")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1 Score: {f1:.4f}")
+    print(f"AUC Score: {auc_score:.4f}")
+
+    # Store metrics
+    all_accuracies.append(accuracy)
+    all_precisions.append(precision)
+    all_recalls.append(recall)
+    all_f1s.append(f1)
+    all_aucs.append(auc_score)
 
 print("\n=== CNN Classification Results ===")
-print(f"Accuracy: {accuracy:.4f}")
-print(f"Precision: {precision:.4f}")
-print(f"Recall: {recall:.4f}")
-print(f"F1 Score: {f1:.4f}")
-print(f"AUC Score: {auc_score:.4f}")
+print(f"Avg Accuracy: {np.mean(all_accuracies):.4f}")
+print(f"Avg Precision: {np.mean(all_precisions):.4f}")
+print(f"Avg Recall: {np.mean(all_recalls):.4f}")
+print(f"Avg F1 Score: {np.mean(all_f1s):.4f}")
+print(f"Avg AUC Score: {np.mean(all_aucs):.4f}")
 
-print(f"{accuracy:.4f}\t{precision:.4f}\t{recall:.4f}\t{f1:.4f}\t{auc_score:.4f}")
+# print(f"{accuracy:.4f}\t{precision:.4f}\t{recall:.4f}\t{f1:.4f}\t{auc_score:.4f}")
 

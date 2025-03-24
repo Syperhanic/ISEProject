@@ -91,11 +91,10 @@ trial_results = []
 def objective(trial):
     """Objective function for Optuna hyperparameter tuning (runs each configuration 5 times)."""
 
-    # **1️⃣ Sample Hyperparameters**
-    learning_rate = trial.suggest_float('lr', 1e-5, 1, log=True)  # ✅ Fix for deprecated suggest_loguniform
+    # Sample Hyperparameters
+    learning_rate = trial.suggest_float('lr', 1e-5, 1, log=True)
     batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128])
 
-    # ✅ Fix: Store kernel sizes as string & convert back to tuple
     kernel_sizes_options = ["(2,4,6)", "(3,5,7)", "(3,4,5)", "(5,7,9)"]
     kernel_sizes_str = trial.suggest_categorical('kernel_sizes', kernel_sizes_options)
     kernel_sizes = tuple(map(int, kernel_sizes_str.strip("()").split(",")))  # Convert back to tuple
@@ -103,12 +102,12 @@ def objective(trial):
     num_epochs = trial.suggest_int('epochs', 5, 100)
     activation_fn = trial.suggest_categorical('activation_fn', ['ReLU', 'LeakyReLU', 'GELU', 'SiLU'])
 
-    # **2️⃣ Run each configuration 5 times and average the metrics**
-    num_repeats = 5
+    # Run each configuration 5 times and average the metrics
+    NUM_RUNS = 5
     f1_scores, accuracies, precisions, recalls, auc_scores = [], [], [], [], []
 
-    for _ in range(num_repeats):
-        # **3️⃣ Data Preparation**
+    for _ in range(NUM_RUNS):
+        # Data Preparation
         train_texts, test_texts, train_labels, test_labels = train_test_split(
             df["tokens"].tolist(), df["label"].tolist(), test_size=0.2, random_state=np.random.randint(10000)
         )
@@ -116,7 +115,7 @@ def objective(trial):
         train_sequences = [text_to_embedding_indices(text, glove_embeddings) for text in train_texts]
         test_sequences = [text_to_embedding_indices(text, glove_embeddings) for text in test_texts]
 
-        # ✅ Fix: Convert to NumPy first before converting to PyTorch tensor
+        # Convert to NumPy first before converting to PyTorch tensor
         train_sequences_np = np.array(train_sequences, dtype=np.float32)
         train_labels_np = np.array(train_labels, dtype=np.int64)
         test_sequences_np = np.array(test_sequences, dtype=np.float32)
@@ -130,7 +129,7 @@ def objective(trial):
         train_data = DataLoader(TextDataset(train_sequences, train_labels), batch_size=batch_size, shuffle=True)
         test_data = DataLoader(TextDataset(test_sequences, test_labels), batch_size=batch_size, shuffle=False)
 
-        # **4️⃣ Define CNN Model**
+        # Define CNN Model
         class CNNTextClassifier(nn.Module):
             def __init__(self, embedding_dim, num_classes):
                 super(CNNTextClassifier, self).__init__()
@@ -153,11 +152,11 @@ def objective(trial):
                 x = self.fc(x)
                 return x
 
-        # **5️⃣ Initialize Model**
+        # Initialize Model
         device = torch.device("cpu")
         model = CNNTextClassifier(embedding_dim=100, num_classes=2).to(device)
 
-        # **6️⃣ Training**
+        # Training
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -171,7 +170,7 @@ def objective(trial):
                 loss.backward()
                 optimizer.step()
 
-        # **7️⃣ Evaluation**
+        # Evaluation
         model.eval()
         all_preds, all_labels = [], []
         with torch.no_grad():
@@ -189,7 +188,7 @@ def objective(trial):
         recalls.append(recall_score(all_labels, all_preds, average='macro'))
         auc_scores.append(roc_auc_score(all_labels, all_preds))
 
-    # **8️⃣ Compute and Store Averages**
+    # Compute and Store Averages
     trial_results.append({
         'Trial': trial.number,
         'Learning Rate': learning_rate,
