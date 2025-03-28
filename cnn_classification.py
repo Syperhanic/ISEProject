@@ -233,17 +233,6 @@ for run in range(NUM_RUNS):
     all_f1s.append(f1)
     all_aucs.append(auc_score)
 
-print("Accuracies")
-print(all_accuracies)
-print("Precisions")
-print(all_precisions)
-print("Recalls")
-print(all_recalls)
-print("F1s")
-print(all_f1s)
-print("AUCs")
-print(all_aucs)
-
 print("\n=== CNN Classification Results ===")
 print(f"Avg Accuracy: {np.mean(all_accuracies):.4f}")
 print(f"Avg Precision: {np.mean(all_precisions):.4f}")
